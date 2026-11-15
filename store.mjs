@@ -1,10 +1,17 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 // Persistent state: seen proof references (per mode) + idempotent responses.
 // Plain JSON file; the agent is single-process so no locking is needed.
 export class Store {
   constructor(path) {
     this.path = path;
+    // Best-effort: the data dir may not exist (e.g. DATA_DIR=/data with no
+    // volume attached). State persistence must never be able to kill a task
+    // answer, so every filesystem touch here is failure-tolerant. The mkdir
+    // is deliberately NON-recursive: a single syscall that fails fast on
+    // exotic filesystems instead of walking ancestors.
+    try { mkdirSync(dirname(path)); } catch { /* exists or in-memory only */ }
     this.data = { seen: { practice: [], competition: [] }, responses: {} };
     if (existsSync(path)) {
       try {
@@ -23,7 +30,13 @@ export class Store {
       practice: [...this.seenSets.practice],
       competition: [...this.seenSets.competition],
     };
-    writeFileSync(this.path, JSON.stringify(this.data));
+    try {
+      writeFileSync(this.path, JSON.stringify(this.data));
+    } catch (e) {
+      // Persistence is best-effort; the in-memory sets remain authoritative
+      // for this process. Never let a failed write eat a task response.
+      console.log(JSON.stringify({ t: new Date().toISOString(), event: 'store.flush_failed', error: String(e && e.message ? e.message : e) }));
+    }
   }
 
   hasSeen(mode, proofTx) {
