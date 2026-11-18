@@ -97,6 +97,22 @@ const server = createServer((req, res) => {
   };
 
   if (req.method === 'GET') {
+    const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/siwe-form') {
+      const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const html = '<!doctype html><html><body>' +
+        '<form method="POST" action="https://agentgames.zkverify.io/api/auth/callback/wallet">' +
+        '<textarea name="message" rows="14" cols="80">' + esc(url.searchParams.get('message')) + '</textarea><br>' +
+        '<input name="signature" size="100" value="' + esc(url.searchParams.get('signature')) + '"><br>' +
+        '<input name="csrfToken" size="70" value="' + esc(url.searchParams.get('csrfToken')) + '"><br>' +
+        '<input type="hidden" name="callbackUrl" value="https://agentgames.zkverify.io/dashboard">' +
+        '<input type="hidden" name="json" value="true">' +
+        '<button type="submit">Sign in to Agent Games</button>' +
+        '</form></body></html>';
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end(html);
+      return;
+    }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, service: 'gatekeeper-agent', protocolVersion: 'v1' }));
     return;
